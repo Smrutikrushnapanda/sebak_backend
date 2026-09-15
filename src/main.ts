@@ -34,6 +34,17 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
+  const httpApp = app.getHttpAdapter().getInstance();
+  httpApp.get('/', (req, res) => {
+    res.json({
+      status: 'ok',
+      message: 'MLA Constituency Management API is running',
+      version: '1.0.0',
+      docs: '/api/v1',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   const port = process.env.PORT || 4000;
   await app.listen(port, '0.0.0.0');
   logger.log(`🚀 MLA Constituency Backend Server running on: http://0.0.0.0:${port}/api/v1`);
