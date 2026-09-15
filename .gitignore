@@ -14,8 +14,8 @@ npm-debug.log*
 # local env files
 .env
 
-# uploads
-uploads/
+# uploads (root only)
+/uploads/
 
 # Mac
 __MACOSX/
