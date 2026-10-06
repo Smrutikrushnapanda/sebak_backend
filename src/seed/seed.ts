@@ -182,6 +182,23 @@ async function runSeed() {
   adminRole.menus = savedMenus;
   adminRole = await roleRepo.save(adminRole);
 
+  let mlaRole = await roleRepo.findOne({
+    where: { slug: 'mla' },
+    relations: ['permissions', 'menus'],
+  });
+
+  if (!mlaRole) {
+    mlaRole = roleRepo.create({
+      name: 'MLA',
+      slug: 'mla',
+      description: 'Member of Legislative Assembly (Elected Representative) with full executive access',
+      isSystem: true,
+    });
+  }
+  mlaRole.permissions = savedPermissions;
+  mlaRole.menus = savedMenus;
+  mlaRole = await roleRepo.save(mlaRole);
+
   let coordinatorRole = await roleRepo.findOne({
     where: { slug: 'coordinator' },
     relations: ['permissions', 'menus'],
@@ -206,7 +223,7 @@ async function runSeed() {
     coordinatorRole.menus = coordMenus;
   }
   await roleRepo.save(coordinatorRole);
-  console.log('✅ Seeded Admin and Coordinator roles.');
+  console.log('✅ Seeded Admin, MLA, and Coordinator roles.');
 
   // 4. Seed Designations
   console.log('🎖️ Seeding Member Designations...');
@@ -231,15 +248,15 @@ async function runSeed() {
   }
   console.log(`✅ Seeded ${designations.length} member designations.`);
 
-  // 5. Seed Admin Users
-  console.log('👤 Seeding Admin Users...');
+  // 5. Seed Admin and MLA Users
+  console.log('👤 Seeding System Users...');
   const passwordHash = await bcrypt.hash('password', 10);
-  const adminUsersToSeed = [
-    { mobile: '9876543210', fullName: 'Admin Administrator', email: 'admin@mla.gov.in' },
-    { mobile: '7381142451', fullName: 'Smrutikrushna Panda', email: 'smruti@mla.gov.in' },
+  const usersToSeed = [
+    { mobile: '9876543210', fullName: 'Admin Administrator', email: 'admin@mla.gov.in', roleId: adminRole.id },
+    { mobile: '7381142451', fullName: 'Shri Akash Dasnayak', email: 'smruti@mla.gov.in', roleId: mlaRole.id },
   ];
 
-  for (const uData of adminUsersToSeed) {
+  for (const uData of usersToSeed) {
     let u = await userRepo.findOne({ where: [{ mobile: uData.mobile }, { email: uData.email }] });
     if (!u) {
       u = userRepo.create({
@@ -247,20 +264,20 @@ async function runSeed() {
         mobile: uData.mobile,
         email: uData.email,
         passwordHash,
-        roleId: adminRole.id,
+        roleId: uData.roleId,
         status: UserStatus.ACTIVE,
       });
       await userRepo.save(u);
-      console.log(`🎉 Admin user created: ${uData.mobile} / admin123`);
+      console.log(`🎉 User created: ${uData.fullName} (${uData.mobile}) / password`);
     } else {
       u.mobile = uData.mobile;
       u.fullName = uData.fullName;
       u.email = uData.email;
       u.passwordHash = passwordHash;
-      u.roleId = adminRole.id;
+      u.roleId = uData.roleId;
       u.status = UserStatus.ACTIVE;
       await userRepo.save(u);
-      console.log(`✅ Admin user updated: ${uData.mobile} / admin123`);
+      console.log(`✅ User updated: ${uData.fullName} (${uData.mobile}) / password`);
     }
   }
 

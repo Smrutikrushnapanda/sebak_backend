@@ -23,7 +23,7 @@ export class MenusController {
 
   @Get('my')
   async getMyMenus(@CurrentUser() user: User) {
-    const isSystemAdmin = user.role?.isSystem || user.role?.slug === 'admin' || user.role?.slug === 'mla-admin';
+    const isSystemAdmin = user.role?.isSystem || user.role?.slug === 'admin' || user.role?.slug === 'mla' || user.role?.slug === 'mla-admin';
     return this.menusService.getMenuTree(user.roleId, isSystemAdmin);
   }
 

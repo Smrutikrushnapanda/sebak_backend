@@ -21,8 +21,8 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('User context missing');
     }
 
-    // System admin role has full access
-    if (user.role?.isSystem || user.role?.slug === 'admin' || user.role?.slug === 'mla-admin') {
+    // System admin and MLA roles have full access
+    if (user.role?.isSystem || user.role?.slug === 'admin' || user.role?.slug === 'mla' || user.role?.slug === 'mla-admin') {
       return true;
     }
 
