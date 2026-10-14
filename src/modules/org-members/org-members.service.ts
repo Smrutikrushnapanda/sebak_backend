@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrgMember, OrgMemberDesignation, OrgMemberStatus } from '@/entities';
@@ -24,11 +28,32 @@ export class OrgMembersService {
     const pending = await this.memberRepo.count({ where: { status: OrgMemberStatus.PENDING } });
     const keyPersons = await this.memberRepo.count({ where: { isKeyPerson: true } });
 
+    // Designation-wise breakdown used by the dashboard's distribution card
+    const designationRaw = await this.memberRepo
+      .createQueryBuilder('m')
+      .leftJoin('m.designation', 'd')
+      .select('COALESCE(d.name, :unassigned)', 'name')
+      .addSelect('COUNT(*)', 'count')
+      .setParameter('unassigned', 'Unassigned')
+      .groupBy('COALESCE(d.name, :unassigned)')
+      .orderBy('count', 'DESC')
+      .getRawMany();
+
+    const designationCounts = designationRaw.map((row) => ({
+      name: row.name,
+      count: Number(row.count) || 0,
+    }));
+
     return {
       total,
       active,
       pending,
       keyPersons,
+      // Explicit aliases read directly by the dashboard. Key persons are regular
+      // members, so `total` already includes them.
+      totalMembers: total,
+      activeMembers: active,
+      designationCounts,
     };
   }
 
@@ -116,6 +141,38 @@ export class OrgMembersService {
     return member;
   }
 
+  /**
+   * Mobile numbers must be unique across the directory.
+   * Also matches the prefixes older records may carry (+91 / 91 / 0).
+   */
+  private async assertMobileUnique(mobile: string, excludeId?: string): Promise<void> {
+    const digits = String(mobile).replace(/\D/g, '').slice(-10);
+
+    const query = this.memberRepo
+      .createQueryBuilder('m')
+      .where(
+        'm.mobile = :exact OR m.mobile = :plain OR m.mobile = :plus91 OR m.mobile = :code91 OR m.mobile = :zero',
+        {
+          exact: mobile,
+          plain: digits,
+          plus91: `+91${digits}`,
+          code91: `91${digits}`,
+          zero: `0${digits}`,
+        },
+      );
+
+    if (excludeId) {
+      query.andWhere('m.id != :excludeId', { excludeId });
+    }
+
+    const existing = await query.getOne();
+    if (existing) {
+      throw new ConflictException(
+        `Mobile number ${digits} already exists in the directory`,
+      );
+    }
+  }
+
   async create(dto: CreateOrgMemberDto, userId?: string): Promise<OrgMember> {
     const designation = await this.designationRepo.findOne({
       where: { id: dto.designationId },
@@ -123,6 +180,8 @@ export class OrgMembersService {
     if (!designation) {
       throw new NotFoundException(`Designation with ID ${dto.designationId} not found`);
     }
+
+    await this.assertMobileUnique(dto.mobile);
 
     const member = this.memberRepo.create({
       ...dto,
@@ -141,6 +200,10 @@ export class OrgMembersService {
       if (!designation) {
         throw new NotFoundException(`Designation with ID ${dto.designationId} not found`);
       }
+    }
+
+    if (dto.mobile) {
+      await this.assertMobileUnique(dto.mobile, id);
     }
 
     Object.assign(member, dto);
